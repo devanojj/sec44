@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Listeners | Mac Security Watchdog{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Latest Listener Snapshot</h2>
+  <p><strong>Captured:</strong> {{ snapshot_ts or "Never" }}</p>
+
+  <table>
+    <thead>
+      <tr><th>IP</th><th>Port</th><th>Family</th><th>PID</th><th>Process</th></tr>
+    </thead>
+    <tbody>
+      {% for item in listeners %}
+      <tr>
+        <td>{{ item.ip }}</td>
+        <td>{{ item.port }}</td>
+        <td>{{ item.family }}</td>
+        <td>{{ item.pid }}</td>
+        <td>{{ item.process_name or "unknown" }}</td>
+      </tr>
+      {% endfor %}
+      {% if not listeners %}
+      <tr>
+        <td colspan="5">No listener snapshot available yet.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

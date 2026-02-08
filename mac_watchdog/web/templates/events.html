@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Events | Mac Security Watchdog{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Event Timeline</h2>
+  <form method="get" class="filters">
+    <label>Severity
+      <select name="severity">
+        <option value="" {% if not filters.severity %}selected{% endif %}>All</option>
+        <option value="INFO" {% if filters.severity == "INFO" %}selected{% endif %}>INFO</option>
+        <option value="WARN" {% if filters.severity == "WARN" %}selected{% endif %}>WARN</option>
+        <option value="HIGH" {% if filters.severity == "HIGH" %}selected{% endif %}>HIGH</option>
+      </select>
+    </label>
+    <label>Source
+      <input name="source" value="{{ filters.source }}" />
+    </label>
+    <label>Start (ISO)
+      <input name="start" value="{{ filters.start }}" placeholder="2026-01-01T00:00:00+00:00" />
+    </label>
+    <label>End (ISO)
+      <input name="end" value="{{ filters.end }}" placeholder="2026-01-01T23:59:59+00:00" />
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Severity</th><th>Source</th><th>Title</th><th>Details</th></tr>
+    </thead>
+    <tbody>
+      {% for event in events %}
+      <tr>
+        <td>{{ event.ts }}</td>
+        <td><span class="badge {{ event.severity|lower }}">{{ event.severity }}</span></td>
+        <td>{{ event.source }}</td>
+        <td>{{ event.title }}</td>
+        <td><code>{{ event.details }}</code></td>
+      </tr>
+      {% endfor %}
+      {% if not events %}
+      <tr>
+        <td colspan="5">No matching events.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    {% if page > 1 %}
+      <a href="?page={{ page - 1 }}&severity={{ filters.severity }}&source={{ filters.source }}&start={{ filters.start }}&end={{ filters.end }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page }}</span>
+    {% if events|length >= page_size %}
+      <a href="?page={{ page + 1 }}&severity={{ filters.severity }}&source={{ filters.source }}&start={{ filters.start }}&end={{ filters.end }}">Next</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

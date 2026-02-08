@@ -1,0 +1,307 @@
+# Mac Security Watchdog (Local-First MVP)
+
+A minimal security-focused host watchdog for macOS Ventura/Sonoma.
+
+- Local-only MVP: no cloud, no telemetry, no outbound network calls.
+- Runs as regular user (no sudo required).
+- Collects process snapshots, login/auth log summaries, network listeners, and optional filewatch events.
+- Stores normalized events in local SQLite with strict permissions.
+- Serves a local dashboard on `127.0.0.1` only.
+
+## Features
+
+- Process monitor (`psutil.process_iter`) with:
+  - new-process detection via `process_seen`
+  - unusual executable path detection (`/tmp`, `/private/tmp`, `~/Downloads`)
+  - denylist and allowlist checks from config
+  - privacy default: no command-line args collected
+- Login/auth monitor (`/usr/bin/log show`) with:
+  - fixed command + fixed predicate
+  - no user-supplied predicate
+  - timeout and error handling
+- Network listener monitor (`psutil.net_connections(kind="inet")`) with:
+  - snapshot comparison for new listeners
+  - interface-aware severity (`0.0.0.0` / `::` => HIGH)
+- Optional filewatch monitor (`watchdog`, OFF by default):
+  - limited paths only (`~/Downloads`, `~/Desktop` by default)
+  - debounce to reduce noise
+  - executable artifact heuristics
+- Local web UI (FastAPI + Jinja2):
+  - Overview, Events, Listeners, Settings pages
+  - security headers middleware
+  - docs disabled by default
+
+## Security Defaults
+
+- Web server binds to loopback (`127.0.0.1` or other loopback only).
+- FastAPI docs endpoints disabled by default (`/docs`, `/redoc`, `/openapi.json`).
+- Strict template escaping (Jinja2 autoescape, no unsafe HTML rendering).
+- SQL injection defenses: parameterized SQL only.
+- Subprocess safety for login monitor:
+  - `shell=False`
+  - fixed executable path (`/usr/bin/log`)
+  - fixed args only
+  - timeout handling
+- Sanitization for DB inserts:
+  - control character stripping
+  - truncation to 4k per text field
+  - JSON-safe details serialization
+- Filesystem permissions:
+  - `~/.mac_watchdog` => `0700`
+  - config and DB files => `0600`
+- Local-only/no exfiltration by design.
+
+## Threat Model (MVP)
+
+### Assets
+- Local event history (`events` table)
+- Process/network/login telemetry
+- Local configuration
+
+### Trusted boundary
+- User account on local Mac
+- Loopback-only dashboard (`127.0.0.1`)
+
+### Attacker assumptions
+- Unprivileged local malware may run on host.
+- Network attackers should not access the app if loopback binding is preserved.
+- Root/system-level adversary is out of scope for this MVP.
+
+### Main risks and mitigations
+- Command injection: fixed subprocess command and args.
+- SQL injection: parameterized queries everywhere.
+- XSS: server-rendered templates with escaping; no untrusted HTML rendering.
+- Privilege escalation: app runs unprivileged, no sudo requirement.
+- Overexposure: loopback-only binding, docs disabled by default.
+
+## Project Layout
+
+```
+mac_watchdog/
+  __init__.py
+  main.py
+  config.py
+  db.py
+  models.py
+  sanitizer.py
+  scoring.py
+  scheduler.py
+  collectors/
+    __init__.py
+    processes.py
+    logins.py
+    network.py
+    filewatch.py
+  web/
+    __init__.py
+    app.py
+    middleware.py
+    routes.py
+    templates/
+      base.html
+      overview.html
+      events.html
+      listeners.html
+      settings.html
+    static/
+      styles.css
+tests/
+  test_config.py
+  test_db.py
+  test_sanitizer.py
+  test_collectors_resilience.py
+  test_web_local_bind.py
+pyproject.toml
+.env.example
+.gitignore
+README.md
+```
+
+## Configuration
+
+Default config path: `~/.mac_watchdog/config.toml`
+
+```toml
+interval_seconds = 60
+web_host = "127.0.0.1"
+web_port = 8765
+enable_file_watch = false
+watch_paths = ["~/Downloads", "~/Desktop"]
+deny_process_names = []
+allow_process_paths = []
+unusual_exec_paths = ["/tmp", "/private/tmp"]
+severity_weights = { INFO = 1, WARN = 3, HIGH = 8 }
+dev_enable_docs = false
+```
+
+Environment overrides:
+
+- `MAC_WATCHDOG_INTERVAL`
+- `MAC_WATCHDOG_HOST`
+- `MAC_WATCHDOG_PORT`
+- `MAC_WATCHDOG_ENABLE_FILE_WATCH`
+- `MAC_WATCHDOG_WATCH_PATHS`
+- `MAC_WATCHDOG_DENY_PROCESS_NAMES`
+- `MAC_WATCHDOG_ALLOW_PROCESS_PATHS`
+- `MAC_WATCHDOG_UNUSUAL_EXEC_PATHS`
+- `MAC_WATCHDOG_DEV_ENABLE_DOCS`
+- `MAC_WATCHDOG_SEVERITY_WEIGHTS` (example: `INFO=1,WARN=3,HIGH=8`)
+
+## Install (macOS)
+
+```bash
+cd /Users/devano/Documents/GitHub/sec44
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e .
+```
+
+For development checks:
+
+```bash
+pip install -e .[dev]
+```
+
+## Run
+
+Initialize config + DB:
+
+```bash
+mac-watchdog init
+```
+
+Run one collection cycle:
+
+```bash
+mac-watchdog run-once --verbose
+```
+
+Run daemon collectors only:
+
+```bash
+mac-watchdog daemon --no-web --verbose
+```
+
+Run daemon + local dashboard:
+
+```bash
+mac-watchdog daemon --verbose
+```
+
+Run dashboard only:
+
+```bash
+mac-watchdog serve --host 127.0.0.1 --port 8765
+```
+
+Module entrypoint is also available:
+
+```bash
+python -m mac_watchdog.main run-once
+```
+
+## Test Commands
+
+```bash
+pytest
+```
+
+Optional quality checks:
+
+```bash
+ruff check .
+black --check .
+mypy mac_watchdog
+```
+
+Optional dependency audit:
+
+```bash
+pip-audit
+```
+
+## SQLite Schema
+
+Location: `~/.mac_watchdog/mac_watchdog.db`
+
+- `events(id, ts, source, severity, title, details_json)`
+- `process_seen(process_key, first_seen, last_seen)`
+- `latest_snapshots(key, ts, blob_json)`
+- `app_state(key, value)`
+
+Indexes:
+
+- `idx_events_ts`
+- `idx_events_source`
+- `idx_events_severity`
+
+## LaunchAgent Examples (User-level)
+
+Collector daemon (no web):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key><string>com.local.macwatchdog.collector</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/YOU/.venv/bin/mac-watchdog</string>
+      <string>daemon</string>
+      <string>--no-web</string>
+    </array>
+    <key>WorkingDirectory</key><string>/Users/YOU/path/to/sec44</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
+    </dict>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>StandardOutPath</key><string>/tmp/mac-watchdog.out.log</string>
+    <key>StandardErrorPath</key><string>/tmp/mac-watchdog.err.log</string>
+  </dict>
+</plist>
+```
+
+Web UI service (optional):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key><string>com.local.macwatchdog.web</string>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/YOU/.venv/bin/mac-watchdog</string>
+      <string>serve</string>
+      <string>--host</string>
+      <string>127.0.0.1</string>
+      <string>--port</string>
+      <string>8765</string>
+    </array>
+    <key>WorkingDirectory</key><string>/Users/YOU/path/to/sec44</string>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+  </dict>
+</plist>
+```
+
+## Security Limitations (MVP)
+
+- No authentication because service is localhost-only; auth is mandatory if exposed beyond loopback.
+- No kernel/system extension telemetry.
+- No integrity-protected local storage yet.
+- No event signing/tamper evidence in MVP.
+- Some process/listener owner details may be hidden by macOS permissions.
+
+## SaaS Migration Path (Next Steps)
+
+1. Introduce signed local agent identity + mTLS transport to backend.
+2. Add tenant-aware ingest API and multi-tenant RBAC.
+3. Move from local SQLite to secure queue + centralized datastore.
+4. Add authenticated web console with OIDC/SAML and audit logs.
+5. Implement policy distribution and remote update channels.
+6. Add secure event batching, compression, retry, and backpressure controls.

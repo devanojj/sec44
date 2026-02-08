@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Settings | Mac Security Watchdog{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Effective Configuration</h2>
+  <table>
+    <thead>
+      <tr><th>Key</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      {% for key, value in settings.items() %}
+      <tr>
+        <td>{{ key }}</td>
+        <td><code>{{ value }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <p><strong>Data directory:</strong> <code>{{ data_dir }}</code></p>
+  <p><strong>Database path:</strong> <code>{{ db_path }}</code></p>
+</section>
+{% endblock %}

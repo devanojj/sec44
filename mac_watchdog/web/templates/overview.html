@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Overview | Mac Security Watchdog{% endblock %}
+{% block content %}
+<section class="grid">
+  <article class="card">
+    <h2>Collector Status</h2>
+    <p><strong>Last run:</strong> {{ last_run or "Never" }}</p>
+    <p><strong>Daily risk score:</strong> <span class="badge {{ score_level|lower }}">{{ score_level }}</span> ({{ score }})</p>
+  </article>
+
+  <article class="card">
+    <h2>Events Today</h2>
+    <ul>
+      <li>INFO: {{ counts.INFO }}</li>
+      <li>WARN: {{ counts.WARN }}</li>
+      <li>HIGH: {{ counts.HIGH }}</li>
+    </ul>
+  </article>
+</section>
+
+<section class="card">
+  <h2>Top Alerts</h2>
+  {% if top_alerts %}
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Severity</th><th>Source</th><th>Title</th></tr>
+    </thead>
+    <tbody>
+      {% for event in top_alerts %}
+      <tr>
+        <td>{{ event.ts }}</td>
+        <td><span class="badge {{ event.severity|lower }}">{{ event.severity }}</span></td>
+        <td>{{ event.source }}</td>
+        <td>{{ event.title }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p>No alerts yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
