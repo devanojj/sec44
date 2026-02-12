@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "Endpoint Monitor" }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Insight-first Endpoint Monitoring</h1>
+      <nav>
+        <a href="/overview">Overview</a>
+        <a href="/fleet">Fleet</a>
+        <a href="/insights">Insights</a>
+        <a href="/events">Events</a>
+        <a href="/devices">Devices</a>
+      </nav>
+      {% if principal %}
+        <div class="principal">
+          <span>Org: {{ principal.org_id }} | User: {{ principal.username }} | Role: {{ principal.role }}</span>
+          <button id="logout-btn" type="button">Logout</button>
+        </div>
+      {% endif %}
+    </header>
+    <main>
+      {% block content %}{% endblock %}
+    </main>
+    <script>
+      (function () {
+        const btn = document.getElementById("logout-btn");
+        if (!btn) return;
+        function readCookie(name) {
+          const key = name + "=";
+          for (const part of document.cookie.split(';')) {
+            const v = part.trim();
+            if (v.startsWith(key)) return decodeURIComponent(v.slice(key.length));
+          }
+          return "";
+        }
+        btn.addEventListener("click", async () => {
+          const csrf = readCookie("em_csrf");
+          await fetch("/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrf } });
+          window.location.href = "/login";
+        });
+      })();
+    </script>
+  </body>
+</html>

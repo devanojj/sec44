@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Fleet Brief</h2>
+<section class="card">
+  <h3>Alerts Summary</h3>
+  <p>INFO: {{ alerts_summary.INFO }} | WARN: {{ alerts_summary.WARN }} | HIGH: {{ alerts_summary.HIGH }}</p>
+</section>
+
+{% if fleet %}
+  {% for device in fleet %}
+  <section class="card">
+    <h3><a href="/devices/{{ device.device_id }}">{{ device.device_id }}</a> ({{ device.platform }})</h3>
+    <p>Risk: <strong>{{ device.risk_score }}</strong> | Top driver: {{ device.top_driver }} | Delta vs 7d: {{ device.delta_vs_7d }}</p>
+    <p>Failed logins: {{ device.failed_logins }} | New listeners: {{ device.new_listeners }} | New processes: {{ device.new_processes }} | Suspicious execs: {{ device.suspicious_execs }}</p>
+    <details>
+      <summary>7d Trend</summary>
+      <pre>{{ device.trend_7d }}</pre>
+    </details>
+    <details>
+      <summary>30d Trend</summary>
+      <pre>{{ device.trend_30d }}</pre>
+    </details>
+  </section>
+  {% endfor %}
+{% else %}
+  <p>No fleet metrics yet. Start ingesting events.</p>
+{% endif %}
+{% endblock %}

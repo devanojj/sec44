@@ -1,38 +1,36 @@
 from __future__ import annotations
 
-from mac_watchdog.insights.baseline import classify_ratio, compute_baseline_deltas, compute_median
-from mac_watchdog.insights.schemas import BaselineClassification
+from datetime import UTC, datetime, timedelta
+
+from core.engine import build_insight_bundle
+from shared.enums import Platform, Severity, Source
 
 
-def test_compute_median_values() -> None:
-    assert compute_median([]) == 0.0
-    assert compute_median([1, 5, 3]) == 3.0
-    assert compute_median([1, 2, 3, 10]) == 2.5
-
-
-def test_anomaly_classification_thresholds() -> None:
-    assert classify_ratio(1.49) == BaselineClassification.NORMAL
-    assert classify_ratio(1.5) == BaselineClassification.ELEVATED
-    assert classify_ratio(2.99) == BaselineClassification.ELEVATED
-    assert classify_ratio(3.0) == BaselineClassification.ANOMALOUS
-
-
-def test_compute_baseline_deltas_ratio_text() -> None:
-    today = {
-        "failed_logins_24h": 9,
-        "new_listeners_24h": 3,
-        "new_processes_24h": 6,
-        "suspicious_exec_path_24h": 2,
+def _event(ts: datetime, severity: Severity, title: str) -> dict[str, object]:
+    return {
+        "ts": ts,
+        "source": Source.AUTH.value,
+        "severity": severity.value,
+        "platform": Platform.MACOS.value,
+        "title": title,
+        "details_json": {"event_type": "failed_login", "username": "alice"},
     }
-    history = [
-        {
-            "failed_logins_24h": 1,
-            "new_listeners_24h": 1,
-            "new_processes_24h": 2,
-            "suspicious_exec_path_24h": 0,
-        }
-        for _ in range(14)
-    ]
-    deltas = compute_baseline_deltas(today, history)
-    assert deltas["failed_logins_24h"].ratio == 9.0
-    assert deltas["failed_logins_24h"].classification == BaselineClassification.ANOMALOUS
+
+
+def test_baseline_classifies_anomalous_failed_logins() -> None:
+    now = datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
+    events: list[dict[str, object]] = []
+
+    for days_ago in range(14, 0, -1):
+        day = now - timedelta(days=days_ago)
+        events.append(_event(day, Severity.WARN, "failed_login"))
+
+    for _ in range(8):
+        events.append(_event(now, Severity.WARN, "failed_login"))
+
+    bundle = build_insight_bundle(events, now=now)
+    metric = bundle.baseline["failed_logins"]
+
+    assert metric.classification.value == "anomalous"
+    assert metric.ratio >= 3
+    assert any(insight.insight_type == "anomaly" for insight in bundle.insights)

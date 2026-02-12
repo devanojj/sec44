@@ -1,0 +1,115 @@
+:root {
+  --bg: #f2f6f8;
+  --fg: #102230;
+  --accent: #0a6f8e;
+  --muted: #4f6678;
+  --card: #ffffff;
+  --border: #d0dbe4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top left, #e6f2f7 0%, var(--bg) 45%, #f9fbfc 100%);
+  color: var(--fg);
+}
+
+header {
+  padding: 1rem 1.5rem;
+  background: #102a38;
+  color: #eef8fd;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+nav {
+  margin-top: 0.5rem;
+}
+
+nav a {
+  color: #c6e8f8;
+  margin-right: 1rem;
+  text-decoration: none;
+}
+
+.principal {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+main {
+  padding: 1rem 1.5rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filters {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+  flex-wrap: wrap;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+th,
+td {
+  padding: 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+pre {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--muted);
+}
+
+input,
+button {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.55rem;
+}
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.login-wrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.login-card {
+  width: min(460px, calc(100vw - 2rem));
+}
+
+.login-card form {
+  display: grid;
+  gap: 0.5rem;
+}

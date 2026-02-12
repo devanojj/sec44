@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Events</h2>
+<form method="get" class="filters">
+  <input name="severity" placeholder="severity" value="{{ filters.severity }}" />
+  <input name="source" placeholder="source" value="{{ filters.source }}" />
+  <input name="device_id" placeholder="device_id" value="{{ filters.device_id }}" />
+  <button type="submit">Filter</button>
+</form>
+<p>Total: {{ total }} | Page: {{ page }}</p>
+<table>
+  <thead><tr><th>Time</th><th>Device</th><th>Platform</th><th>Source</th><th>Severity</th><th>Title</th></tr></thead>
+  <tbody>
+    {% for event in events %}
+      <tr>
+        <td>{{ event.ts }}</td>
+        <td>{{ event.device_id }}</td>
+        <td>{{ event.platform }}</td>
+        <td>{{ event.source }}</td>
+        <td>{{ event.severity }}</td>
+        <td>{{ event.title }}</td>
+      </tr>
+      <tr><td colspan="6"><pre>{{ event.details }}</pre></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

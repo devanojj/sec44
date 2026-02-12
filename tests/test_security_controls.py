@@ -1,50 +1,27 @@
 from __future__ import annotations
 
-from pathlib import Path
+import json
 
-from fastapi.testclient import TestClient
-
-from mac_watchdog.config import AppConfig
-from mac_watchdog.db import Database
-from mac_watchdog.models import EventIn, Severity, Source
-from mac_watchdog.web.app import create_app
+from shared.signing import HEADER_NONCE, HEADER_SIGNATURE, HEADER_TIMESTAMP, sign_request, verify_request
 
 
-def test_templates_escape_untrusted_html(tmp_path: Path) -> None:
-    db = Database(tmp_path / "escape.db")
-    cfg = AppConfig()
-    try:
-        db.insert_event(
-            EventIn(
-                source=Source.PROCESS,
-                severity=Severity.WARN,
-                title="<script>alert(1)</script>",
-                details={"sample": "<script>alert(1)</script>"},
-            )
-        )
-        client = TestClient(create_app(cfg, db))
-        response = client.get("/events")
-        assert response.status_code == 200
-        assert "<script>alert(1)</script>" not in response.text
-        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in response.text
-    finally:
-        db.close()
+def test_signing_is_stable_for_permuted_keys() -> None:
+    payload_a = {"z": 1, "a": {"k": "v", "n": 2}}
+    payload_b = {"a": {"n": 2, "k": "v"}, "z": 1}
+    api_key = "secret"
+    assert sign_request(payload_a, api_key) == sign_request(payload_b, api_key)
 
 
-def test_sql_parameterized_event_filters(tmp_path: Path) -> None:
-    db = Database(tmp_path / "sql.db")
-    try:
-        db.insert_event(
-            EventIn(
-                source=Source.PROCESS,
-                severity=Severity.INFO,
-                title="Normal process event",
-                details={"ok": True},
-            )
-        )
-        malicious_source = "process' OR 1=1 --"
-        rows = db.get_events(source=malicious_source)
-        assert rows == []
-        assert db.total_events() == 1
-    finally:
-        db.close()
+def test_verify_rejects_tampered_payload() -> None:
+    payload = {"a": 1, "b": 2}
+    api_key = "secret"
+    signature = sign_request(payload, api_key)
+    headers = {
+        HEADER_SIGNATURE: signature,
+        HEADER_TIMESTAMP: "100",
+        HEADER_NONCE: "n" * 32,
+    }
+    assert verify_request(payload, headers, api_key)
+
+    tampered = json.dumps({"a": 1, "b": 999}).encode("utf-8")
+    assert not verify_request(tampered, headers, api_key)

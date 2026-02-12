@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Fleet Ranking</h2>
+<table>
+  <thead>
+    <tr><th>Device</th><th>Platform</th><th>Risk</th><th>Top Driver</th><th>Delta</th></tr>
+  </thead>
+  <tbody>
+    {% for device in fleet %}
+    <tr>
+      <td><a href="/devices/{{ device.device_id }}">{{ device.device_id }}</a></td>
+      <td>{{ device.platform }}</td>
+      <td>{{ device.risk_score }}</td>
+      <td>{{ device.top_driver }}</td>
+      <td>{{ device.delta_vs_7d }}</td>
+    </tr>
+    <tr><td colspan="5"><pre>trend_7d={{ device.trend_7d }}
+trend_30d={{ device.trend_30d }}</pre></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

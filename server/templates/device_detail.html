@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+{% if device %}
+  <h2>Device {{ device.device_id }}</h2>
+  <p>Platform: {{ device.platform }} | Agent: {{ device.agent_version }}</p>
+  <p>First seen: {{ device.first_seen_at }} | Last seen: {{ device.last_seen_at }}</p>
+{% else %}
+  <h2>Device not found</h2>
+{% endif %}
+
+{% if metric %}
+<section class="card">
+  <h3>Latest Risk</h3>
+  <p>Day: {{ metric.day }} | Risk: {{ metric.risk_score }} | Top driver: {{ metric.top_driver }}</p>
+  <p>Alerts: INFO {{ alerts_summary.INFO }}, WARN {{ alerts_summary.WARN }}, HIGH {{ alerts_summary.HIGH }}</p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h3>Trend 7d</h3>
+  <pre>{{ trend_7d }}</pre>
+</section>
+<section class="card">
+  <h3>Trend 30d</h3>
+  <pre>{{ trend_30d }}</pre>
+</section>
+
+<section>
+  <h3>Recent Insights</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Severity</th><th>Title</th><th>Status</th><th>Count</th></tr></thead>
+    <tbody>
+      {% for insight in insights %}
+      <tr><td>{{ insight.ts }}</td><td>{{ insight.severity }}</td><td>{{ insight.title }}</td><td>{{ insight.status }}</td><td>{{ insight.count }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h3>Recent Events</h3>
+  <table>
+    <thead><tr><th>Time</th><th>Source</th><th>Severity</th><th>Title</th></tr></thead>
+    <tbody>
+      {% for event in events %}
+      <tr><td>{{ event.ts }}</td><td>{{ event.source }}</td><td>{{ event.severity }}</td><td>{{ event.title }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

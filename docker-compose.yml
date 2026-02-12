@@ -1,0 +1,60 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: endpoint
+      POSTGRES_PASSWORD: endpoint
+      POSTGRES_DB: endpoint
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  server:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      EM_ENV: production
+      DATABASE_URL: postgresql+psycopg://endpoint:endpoint@postgres:5432/endpoint
+      REDIS_URL: redis://redis:6379/0
+      EM_SERVER_HOST: 0.0.0.0
+      EM_SERVER_PORT: 8000
+      EM_DEV_ENABLE_DOCS: "false"
+      EM_ENFORCE_HTTPS: "false"
+      EM_JWT_ACCESS_SECRET: change-this-access-secret
+      EM_JWT_REFRESH_SECRET: change-this-refresh-secret
+      EM_CSRF_SECRET: change-this-csrf-secret
+      EM_ORGS_JSON: '{"dev-org":{"name":"Development Org","api_key":"change-this-api-key","rate_limit_per_minute":120}}'
+      EM_USERS_JSON: '[{"org_id":"dev-org","username":"admin","password":"ChangeMeNow!123","role":"admin"}]'
+      EM_METRICS_TOKEN: metrics-token
+    command: ["sh", "-c", "python -m server migrate && python -m server run"]
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      EM_ENV: production
+      DATABASE_URL: postgresql+psycopg://endpoint:endpoint@postgres:5432/endpoint
+      REDIS_URL: redis://redis:6379/0
+      EM_JWT_ACCESS_SECRET: change-this-access-secret
+      EM_JWT_REFRESH_SECRET: change-this-refresh-secret
+      EM_CSRF_SECRET: change-this-csrf-secret
+      EM_ORGS_JSON: '{"dev-org":{"name":"Development Org","api_key":"change-this-api-key","rate_limit_per_minute":120}}'
+      EM_USERS_JSON: '[{"org_id":"dev-org","username":"admin","password":"ChangeMeNow!123","role":"admin"}]'
+    command: ["celery", "-A", "server.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+
+volumes:
+  postgres_data:

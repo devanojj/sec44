@@ -1,47 +1,31 @@
 from __future__ import annotations
 
-from pathlib import Path
+from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
-from mac_watchdog.config import load_config
-
-
-BASE_CONFIG = """interval_seconds = 60
-web_host = \"127.0.0.1\"
-web_port = 8765
-enable_file_watch = false
-watch_paths = [\"~/Downloads\", \"~/Desktop\"]
-deny_process_names = []
-allow_process_paths = []
-unusual_exec_paths = [\"/tmp\", \"/private/tmp\"]
-severity_weights = { INFO = 1, WARN = 3, HIGH = 8 }
-dev_enable_docs = false
-"""
+from shared.constants import MAX_EVENTS_PER_BATCH
+from shared.enums import Platform, Severity, Source
+from shared.schemas import EventEnvelope, IngestRequest
 
 
-def test_config_rejects_unknown_keys(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.toml"
-    config_path.write_text(BASE_CONFIG + "unexpected = 1\n", encoding="utf-8")
+def test_event_count_limit_enforced() -> None:
+    event = EventEnvelope(
+        ts=datetime.now(UTC),
+        source=Source.SYSTEM,
+        severity=Severity.INFO,
+        platform=Platform.MACOS,
+        title="ok",
+        details_json={"k": "v"},
+    )
 
-    with pytest.raises(ValueError):
-        load_config(config_path)
-
-
-def test_config_rejects_invalid_type(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.toml"
-    config_path.write_text(BASE_CONFIG.replace("interval_seconds = 60", "interval_seconds = \"x\""), encoding="utf-8")
-
-    with pytest.raises(ValueError):
-        load_config(config_path)
-
-
-def test_config_loads_valid_file(tmp_path: Path) -> None:
-    config_path = tmp_path / "config.toml"
-    config_path.write_text(BASE_CONFIG, encoding="utf-8")
-
-    cfg = load_config(config_path)
-    assert cfg.interval_seconds == 60
-    assert cfg.web_host == "127.0.0.1"
-    assert cfg.data_dir == tmp_path
-    assert cfg.db_path == tmp_path / "mac_watchdog.db"
+    with pytest.raises(ValidationError):
+        IngestRequest(
+            org_id="dev-org",
+            device_id="device-1",
+            agent_version="0.2.0",
+            sent_at=datetime.now(UTC),
+            nonce="c" * 32,
+            events=[event for _ in range(MAX_EVENTS_PER_BATCH + 1)],
+        )

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Insights</h2>
+<form method="get" class="filters">
+  <input name="severity" placeholder="severity" value="{{ filters.severity }}" />
+  <input name="source" placeholder="source" value="{{ filters.source }}" />
+  <input name="status" placeholder="status" value="{{ filters.status }}" />
+  <input name="device_id" placeholder="device_id" value="{{ filters.device_id }}" />
+  <button type="submit">Filter</button>
+</form>
+<p>Total: {{ total }} | Page: {{ page }}</p>
+<table>
+  <thead><tr><th>Time</th><th>Device</th><th>Severity</th><th>Source</th><th>Status</th><th>Title</th></tr></thead>
+  <tbody>
+    {% for insight in insights %}
+      <tr>
+        <td>{{ insight.ts }}</td>
+        <td>{{ insight.device_id }}</td>
+        <td>{{ insight.severity }}</td>
+        <td>{{ insight.source }}</td>
+        <td>{{ insight.status }}</td>
+        <td>{{ insight.title }}</td>
+      </tr>
+      <tr><td colspan="6"><pre>{{ insight.evidence }}</pre></td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mac-watchdog"
 version = "0.1.0"
-description = "Local-first macOS security watchdog"
+description = "Insight-first endpoint monitoring MVP (agent + cloud server)"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Mac Watchdog" }]
@@ -15,6 +15,15 @@ dependencies = [
   "jinja2==3.1.5",
   "psutil==6.1.1",
   "pydantic==2.10.6",
+  "httpx==0.28.1",
+  "sqlalchemy==2.0.38",
+  "psycopg[binary]==3.2.5",
+  "alembic==1.14.1",
+  "redis==5.2.1",
+  "celery==5.4.0",
+  "PyJWT==2.10.1",
+  "argon2-cffi==23.1.0",
+  "prometheus-client==0.21.1",
   "watchdog==6.0.0",
 ]
 
@@ -25,20 +34,24 @@ dev = [
   "ruff==0.9.6",
   "black==24.10.0",
   "mypy==1.15.0",
+  "bandit==1.8.0",
 ]
 
 [project.scripts]
 mac-watchdog = "mac_watchdog.main:main"
+endpoint-agent = "agent.cli:main"
+endpoint-server = "server.__main__:main"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["mac_watchdog*"]
+include = ["agent*", "core*", "server*", "shared*", "mac_watchdog*"]
 
 [tool.setuptools.package-data]
 "mac_watchdog.web" = ["templates/*.html", "static/*.css"]
 "mac_watchdog.migrations" = ["*.sql"]
+"server" = ["templates/*.html", "static/*.css"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

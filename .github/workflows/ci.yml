@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: endpoint
+          POSTGRES_PASSWORD: endpoint
+          POSTGRES_DB: endpoint
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U endpoint"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql+psycopg://endpoint:endpoint@localhost:5432/endpoint
+      REDIS_URL: redis://localhost:6379/0
+      EM_ENV: ci
+      EM_ALLOW_SQLITE_FOR_TESTS: "true"
+      EM_DEV_ENABLE_DOCS: "false"
+      EM_ENFORCE_HTTPS: "false"
+      EM_JWT_ACCESS_SECRET: ci-access-secret
+      EM_JWT_REFRESH_SECRET: ci-refresh-secret
+      EM_CSRF_SECRET: ci-csrf-secret
+      EM_ORGS_JSON: '{"dev-org":{"name":"Development Org","api_key":"ci-api-key","rate_limit_per_minute":120}}'
+      EM_USERS_JSON: '[{"org_id":"dev-org","username":"admin","password":"ChangeMeNow!123","role":"admin"}]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+      - name: Migrate
+        run: python -m server migrate
+      - name: Lint
+        run: ruff check .
+      - name: Type Check
+        run: mypy agent core server shared
+      - name: Security Static Analysis
+        run: bandit -q -r agent core server shared
+      - name: Tests
+        run: pytest -q
