@@ -56,6 +56,10 @@ nav a {
   font-weight: 600;
 }
 
+a {
+  color: var(--accent);
+}
+
 .page-content {
   padding: 1.3rem;
   max-width: 1100px;
@@ -68,12 +72,21 @@ nav a {
   gap: 1rem;
 }
 
+.two-col {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
 .card {
   background: rgba(23, 31, 43, 0.95);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 1rem;
+}
+
+.insight-card {
+  margin-top: 0.8rem;
+  background: rgba(18, 26, 37, 0.92);
 }
 
 h2 {

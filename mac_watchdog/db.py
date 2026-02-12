@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from mac_watchdog.config import secure_path
+from mac_watchdog.migrations import apply_migrations, current_version
 from mac_watchdog.models import EventIn
 from mac_watchdog.sanitizer import safe_json_dumps, sanitize_text
 
@@ -78,6 +79,27 @@ class Database:
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_source ON events(source)")
             self._conn.execute("CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity)")
+            apply_migrations(self._conn)
+
+    def migration_version(self) -> int:
+        with self._lock:
+            return current_version(self._conn)
+
+    def fetch_all(self, query: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
+        with self._lock:
+            return self._conn.execute(query, params).fetchall()
+
+    def fetch_one(self, query: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
+        with self._lock:
+            return self._conn.execute(query, params).fetchone()
+
+    def execute(self, query: str, params: tuple[Any, ...] = ()) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(query, params)
+
+    def execute_many(self, query: str, params: list[tuple[Any, ...]]) -> None:
+        with self._lock, self._conn:
+            self._conn.executemany(query, params)
 
     def insert_event(self, event: EventIn) -> None:
         self.insert_events([event])
@@ -222,6 +244,43 @@ class Database:
                 }
             )
         return output
+
+    def get_events_between(
+        self,
+        start_ts: str,
+        end_ts: str,
+        severities: tuple[str, ...] | None = None,
+    ) -> list[dict[str, Any]]:
+        clauses = ["ts >= ?", "ts < ?"]
+        params: list[Any] = [sanitize_text(start_ts), sanitize_text(end_ts)]
+        if severities:
+            placeholders = ",".join("?" for _ in severities)
+            clauses.append(f"severity IN ({placeholders})")
+            params.extend([sanitize_text(level) for level in severities])
+        query = (
+            "SELECT id, ts, source, severity, title, details_json "
+            f"FROM events WHERE {' AND '.join(clauses)} ORDER BY ts ASC"
+        )
+        rows = self.fetch_all(query, tuple(params))
+
+        out: list[dict[str, Any]] = []
+        for row in rows:
+            details: Any
+            try:
+                details = json.loads(row["details_json"])
+            except json.JSONDecodeError:
+                details = {}
+            out.append(
+                {
+                    "id": int(row["id"]),
+                    "ts": str(row["ts"]),
+                    "source": str(row["source"]),
+                    "severity": str(row["severity"]),
+                    "title": str(row["title"]),
+                    "details": details,
+                }
+            )
+        return out
 
     def count_events_by_severity(self, since_ts: str | None = None) -> dict[str, int]:
         params: tuple[Any, ...]

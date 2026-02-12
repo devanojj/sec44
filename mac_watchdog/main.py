@@ -11,6 +11,7 @@ import uvicorn
 
 from mac_watchdog.config import DEFAULT_CONFIG_PATH, AppConfig, ensure_app_paths, load_config
 from mac_watchdog.db import Database
+from mac_watchdog.insights import InsightEngine
 from mac_watchdog.scheduler import WatchdogScheduler
 from mac_watchdog.web.app import create_app
 
@@ -61,6 +62,19 @@ def cmd_run_once(args: argparse.Namespace) -> int:
         scheduler = WatchdogScheduler(config=config, db=db, verbose=args.verbose)
         summary = scheduler.run_once()
         logger.info("run-once summary: %s", summary)
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_migrate(args: argparse.Namespace) -> int:
+    config = _load(args.config)
+    db = Database(config.db_path)
+    try:
+        engine = InsightEngine(config=config, db=db)
+        summary = engine.run_backfill()
+        logger.info("migration version: %s", db.migration_version())
+        logger.info("backfill summary: %s", summary)
     finally:
         db.close()
     return 0
@@ -143,6 +157,10 @@ def build_parser() -> argparse.ArgumentParser:
     once_parser.add_argument("--config", type=str, default=None, help="path to config.toml")
     once_parser.add_argument("--verbose", action="store_true")
     once_parser.set_defaults(func=cmd_run_once)
+
+    migrate_parser = subparsers.add_parser("migrate", help="apply schema migrations and backfill insights data")
+    migrate_parser.add_argument("--config", type=str, default=None, help="path to config.toml")
+    migrate_parser.set_defaults(func=cmd_migrate)
 
     daemon_parser = subparsers.add_parser("daemon", help="run collectors periodically")
     daemon_parser.add_argument("--config", type=str, default=None, help="path to config.toml")

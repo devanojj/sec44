@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Insights | Mac Security Watchdog{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Insight Cards</h2>
+  <form method="get" class="filters">
+    <label>Severity
+      <select name="severity">
+        <option value="" {% if not filters.severity %}selected{% endif %}>All</option>
+        <option value="INFO" {% if filters.severity == "INFO" %}selected{% endif %}>INFO</option>
+        <option value="WARN" {% if filters.severity == "WARN" %}selected{% endif %}>WARN</option>
+        <option value="HIGH" {% if filters.severity == "HIGH" %}selected{% endif %}>HIGH</option>
+      </select>
+    </label>
+    <label>Source
+      <select name="source">
+        <option value="" {% if not filters.source %}selected{% endif %}>All</option>
+        <option value="auth" {% if filters.source == "auth" %}selected{% endif %}>auth</option>
+        <option value="network" {% if filters.source == "network" %}selected{% endif %}>network</option>
+        <option value="process" {% if filters.source == "process" %}selected{% endif %}>process</option>
+        <option value="filewatch" {% if filters.source == "filewatch" %}selected{% endif %}>filewatch</option>
+        <option value="system" {% if filters.source == "system" %}selected{% endif %}>system</option>
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        <option value="" {% if not filters.status %}selected{% endif %}>All</option>
+        <option value="open" {% if filters.status == "open" %}selected{% endif %}>open</option>
+        <option value="resolved" {% if filters.status == "resolved" %}selected{% endif %}>resolved</option>
+        <option value="acknowledged" {% if filters.status == "acknowledged" %}selected{% endif %}>acknowledged</option>
+      </select>
+    </label>
+    <label>Start (ISO)
+      <input name="start" value="{{ filters.start }}" placeholder="2026-01-01T00:00:00+00:00" />
+    </label>
+    <label>End (ISO)
+      <input name="end" value="{{ filters.end }}" placeholder="2026-01-01T23:59:59+00:00" />
+    </label>
+    <button type="submit">Filter</button>
+  </form>
+
+  {% if insights %}
+    {% for item in insights %}
+    <article class="card insight-card">
+      <p>
+        <span class="badge {{ item.severity.value|lower }}">{{ item.severity.value }}</span>
+        <strong>{{ item.title }}</strong>
+      </p>
+      <p><strong>Type:</strong> {{ item.insight_type.value }} | <strong>Source:</strong> {{ item.source.value }} | <strong>Status:</strong> {{ item.status.value }}</p>
+      <p><strong>Confidence:</strong> {{ item.confidence.value }}</p>
+      <p><strong>Why flagged:</strong> {{ item.explanation }}</p>
+      <p><strong>Evidence:</strong> <code>{{ item.evidence }}</code></p>
+      <p><strong>Recommended action:</strong> {{ item.action_text }}</p>
+      <p><strong>Seen:</strong> {{ item.first_seen }} to {{ item.last_seen }} {% if item.count > 1 %}| repeated {{ item.count }} times{% endif %}</p>
+    </article>
+    {% endfor %}
+  {% else %}
+    <p>No insights match the selected filters.</p>
+  {% endif %}
+
+  <div class="pagination">
+    {% if page > 1 %}
+      <a href="?page={{ page - 1 }}&severity={{ filters.severity }}&source={{ filters.source }}&status={{ filters.status }}&start={{ filters.start }}&end={{ filters.end }}">Previous</a>
+    {% endif %}
+    <span>Page {{ page }}</span>
+    {% if insights|length >= page_size %}
+      <a href="?page={{ page + 1 }}&severity={{ filters.severity }}&source={{ filters.source }}&status={{ filters.status }}&start={{ filters.start }}&end={{ filters.end }}">Next</a>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

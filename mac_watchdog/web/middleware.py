@@ -13,5 +13,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers[
             "Content-Security-Policy"
-        ] = "default-src 'self'; style-src 'self'; img-src 'self' data:; script-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+        ] = (
+            "default-src 'self'; "
+            "script-src 'none'; "
+            "style-src 'self'; "
+            "img-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'none'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'"
+        )
         return response

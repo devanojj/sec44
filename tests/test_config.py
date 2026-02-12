@@ -43,3 +43,5 @@ def test_config_loads_valid_file(tmp_path: Path) -> None:
     cfg = load_config(config_path)
     assert cfg.interval_seconds == 60
     assert cfg.web_host == "127.0.0.1"
+    assert cfg.data_dir == tmp_path
+    assert cfg.db_path == tmp_path / "mac_watchdog.db"

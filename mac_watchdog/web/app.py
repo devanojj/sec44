@@ -5,9 +5,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import select_autoescape
 
 from mac_watchdog.config import AppConfig
 from mac_watchdog.db import Database
+from mac_watchdog.insights import InsightEngine
 from mac_watchdog.web.middleware import SecurityHeadersMiddleware
 from mac_watchdog.web.routes import router
 
@@ -28,6 +30,8 @@ def create_app(config: AppConfig, db: Database) -> FastAPI:
     app.state.config = config
     app.state.db = db
     app.state.templates = Jinja2Templates(directory=str(templates_dir))
+    app.state.templates.env.autoescape = select_autoescape(enabled_extensions=("html", "xml"), default=True)
+    app.state.insight_engine = InsightEngine(config=config, db=db)
 
     app.add_middleware(SecurityHeadersMiddleware)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

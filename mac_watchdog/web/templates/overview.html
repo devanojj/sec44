@@ -1,43 +1,144 @@
 {% extends "base.html" %}
 {% block title %}Overview | Mac Security Watchdog{% endblock %}
 {% block content %}
-<section class="grid">
-  <article class="card">
-    <h2>Collector Status</h2>
-    <p><strong>Last run:</strong> {{ last_run or "Never" }}</p>
-    <p><strong>Daily risk score:</strong> <span class="badge {{ score_level|lower }}">{{ score_level }}</span> ({{ score }})</p>
-  </article>
+<section class="card">
+  <h2>1) Daily Brief</h2>
+  <p><strong>Last run:</strong> {{ last_run or "Never" }}</p>
+  <p><strong>Risk score:</strong> {{ daily_brief.risk_score }} / 100</p>
+  <p><strong>Delta vs 7-day average:</strong> {{ daily_brief.delta_vs_7d_avg }}</p>
+  <p><strong>Top risk driver:</strong> {{ daily_brief.top_risk_driver }}</p>
+  <p><strong>Events today:</strong> INFO={{ counts.INFO }} WARN={{ counts.WARN }} HIGH={{ counts.HIGH }}</p>
 
-  <article class="card">
-    <h2>Events Today</h2>
-    <ul>
-      <li>INFO: {{ counts.INFO }}</li>
-      <li>WARN: {{ counts.WARN }}</li>
-      <li>HIGH: {{ counts.HIGH }}</li>
-    </ul>
-  </article>
+  <h3>Unusual Behaviors</h3>
+  <ul>
+    {% for item in daily_brief.unusual_behaviors %}
+    <li>{{ item }}</li>
+    {% endfor %}
+    {% if not daily_brief.unusual_behaviors %}
+    <li>No unusual behaviors detected relative to baseline.</li>
+    {% endif %}
+  </ul>
 </section>
 
 <section class="card">
-  <h2>Top Alerts</h2>
-  {% if top_alerts %}
+  <h2>2) Priority Action Queue</h2>
+  {% if action_queue %}
   <table>
     <thead>
-      <tr><th>Time</th><th>Severity</th><th>Source</th><th>Title</th></tr>
+      <tr><th>Severity</th><th>Confidence</th><th>Action</th><th>Repeated</th></tr>
     </thead>
     <tbody>
-      {% for event in top_alerts %}
+      {% for item in action_queue %}
       <tr>
-        <td>{{ event.ts }}</td>
-        <td><span class="badge {{ event.severity|lower }}">{{ event.severity }}</span></td>
-        <td>{{ event.source }}</td>
-        <td>{{ event.title }}</td>
+        <td><span class="badge {{ item.severity|lower }}">{{ item.severity }}</span></td>
+        <td>{{ item.confidence }}</td>
+        <td><strong>{{ item.title }}</strong><br/>{{ item.action }}</td>
+        <td>{% if item.count > 1 %}repeated {{ item.count }} times{% else %}-{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   {% else %}
-    <p>No alerts yet.</p>
+  <p>No priority actions pending.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>3) Risk Drivers (%)</h2>
+  {% if drivers %}
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Contribution</th><th>Explanation</th></tr>
+    </thead>
+    <tbody>
+      {% for driver in drivers %}
+      <tr>
+        <td>{{ driver.category }}</td>
+        <td>{{ "%.2f"|format(driver.percent) }}%</td>
+        <td>{{ driver.explanation }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>No driver data available.</p>
+  {% endif %}
+</section>
+
+<section class="card grid two-col">
+  <article>
+    <h2>4) New Risks Since Yesterday</h2>
+    <ul>
+      {% for item in delta_panel.new_risks %}
+      <li><span class="badge {{ item.severity|lower }}">{{ item.severity }}</span> {{ item.title }}</li>
+      {% endfor %}
+      {% if not delta_panel.new_risks %}
+      <li>No new risks detected.</li>
+      {% endif %}
+    </ul>
+  </article>
+  <article>
+    <h2>4) Resolved Risks Since Yesterday</h2>
+    <ul>
+      {% for item in delta_panel.resolved_risks %}
+      <li>{{ item.title }}</li>
+      {% endfor %}
+      {% if not delta_panel.resolved_risks %}
+      <li>No resolved risks yet.</li>
+      {% endif %}
+    </ul>
+  </article>
+</section>
+
+<section class="card">
+  <h2>5) Baseline Anomalies</h2>
+  <table>
+    <thead>
+      <tr><th>Signal</th><th>Today</th><th>Baseline (14d median)</th><th>Ratio</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for delta in baseline_deltas %}
+      <tr>
+        <td>{{ delta.signal }}</td>
+        <td>{{ delta.today }}</td>
+        <td>{{ "%.2f"|format(delta.baseline) }}</td>
+        <td>{{ "%.1f"|format(delta.ratio) }}x above baseline</td>
+        <td>{{ delta.classification.value }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>6) Posture Trend</h2>
+  <p><strong>Status:</strong> {{ trend.status }}</p>
+  <p><strong>Risk score today vs 7-day average:</strong> {{ trend.risk_score_today }} vs {{ trend.risk_score_7d_avg }}</p>
+  <p><strong>HIGH alerts today vs 7-day average:</strong> {{ trend.high_alerts_today }} vs {{ trend.high_alerts_7d_avg }}</p>
+  <p><strong>HIGH alerts series (7d):</strong>
+    {% if trend.high_alert_series_7d %}
+      {{ trend.high_alert_series_7d | join(' | ') }}
+    {% else %}
+      no data
+    {% endif %}
+  </p>
+</section>
+
+<section class="card">
+  <h2>Recent Insight Cards</h2>
+  <p><a href="/insights">Open full Insights view</a></p>
+  {% if insights_preview %}
+  <ul>
+    {% for insight in insights_preview %}
+    <li>
+      <span class="badge {{ insight.severity.value|lower }}">{{ insight.severity.value }}</span>
+      <strong>{{ insight.title }}</strong>
+      {% if insight.count > 1 %}(repeated {{ insight.count }} times){% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No insights generated yet.</p>
   {% endif %}
 </section>
 {% endblock %}

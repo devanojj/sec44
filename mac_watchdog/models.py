@@ -24,10 +24,10 @@ class Source(str, Enum):
 class EventIn(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    ts: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    ts: str = Field(default_factory=lambda: datetime.now(UTC).isoformat(), min_length=20, max_length=64)
     source: Source
     severity: Severity
-    title: str
+    title: str = Field(min_length=1, max_length=240)
     details: dict[str, Any] = Field(default_factory=dict)
 
 

@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, ValidationError, field_validator
 
 DEFAULT_DATA_DIR = Path.home() / ".mac_watchdog"
 DEFAULT_CONFIG_PATH = DEFAULT_DATA_DIR / "config.toml"
@@ -16,6 +16,8 @@ DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "mac_watchdog.db"
 
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+    _data_dir: Path = PrivateAttr(default=DEFAULT_DATA_DIR)
+    _db_path: Path = PrivateAttr(default=DEFAULT_DB_PATH)
 
     interval_seconds: int = Field(default=60, ge=5, le=3600)
     web_host: str = "127.0.0.1"
@@ -92,11 +94,11 @@ class AppConfig(BaseModel):
 
     @property
     def data_dir(self) -> Path:
-        return DEFAULT_DATA_DIR
+        return self._data_dir
 
     @property
     def db_path(self) -> Path:
-        return DEFAULT_DB_PATH
+        return self._db_path
 
 
 def _parse_bool(raw: str) -> bool:
@@ -193,6 +195,9 @@ def load_config(config_path: Path | None = None) -> AppConfig:
         parsed = tomllib.load(handle)
     parsed.update(_env_overrides())
     try:
-        return AppConfig.model_validate(parsed)
+        config = AppConfig.model_validate(parsed)
     except ValidationError as exc:
         raise ValueError(f"invalid config at {path}: {exc}") from exc
+    config._data_dir = path.parent
+    config._db_path = path.parent / "mac_watchdog.db"
+    return config

@@ -38,6 +38,7 @@ include = ["mac_watchdog*"]
 
 [tool.setuptools.package-data]
 "mac_watchdog.web" = ["templates/*.html", "static/*.css"]
+"mac_watchdog.migrations" = ["*.sql"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

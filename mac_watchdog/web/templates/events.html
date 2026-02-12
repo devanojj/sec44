@@ -2,7 +2,7 @@
 {% block title %}Events | Mac Security Watchdog{% endblock %}
 {% block content %}
 <section class="card">
-  <h2>Event Timeline</h2>
+  <h2>Event Timeline (Raw Evidence)</h2>
   <form method="get" class="filters">
     <label>Severity
       <select name="severity">
@@ -13,7 +13,14 @@
       </select>
     </label>
     <label>Source
-      <input name="source" value="{{ filters.source }}" />
+      <select name="source">
+        <option value="" {% if not filters.source %}selected{% endif %}>All</option>
+        <option value="process" {% if filters.source == "process" %}selected{% endif %}>process</option>
+        <option value="login" {% if filters.source == "login" %}selected{% endif %}>login</option>
+        <option value="network" {% if filters.source == "network" %}selected{% endif %}>network</option>
+        <option value="filewatch" {% if filters.source == "filewatch" %}selected{% endif %}>filewatch</option>
+        <option value="system" {% if filters.source == "system" %}selected{% endif %}>system</option>
+      </select>
     </label>
     <label>Start (ISO)
       <input name="start" value="{{ filters.start }}" placeholder="2026-01-01T00:00:00+00:00" />

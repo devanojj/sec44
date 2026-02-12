@@ -1,307 +1,230 @@
 # Mac Security Watchdog (Local-First MVP)
 
-A minimal security-focused host watchdog for macOS Ventura/Sonoma.
+Security-focused macOS watchdog with deterministic, explainable security insights.
 
-- Local-only MVP: no cloud, no telemetry, no outbound network calls.
-- Runs as regular user (no sudo required).
-- Collects process snapshots, login/auth log summaries, network listeners, and optional filewatch events.
-- Stores normalized events in local SQLite with strict permissions.
-- Serves a local dashboard on `127.0.0.1` only.
+- Local-only operation by default (`127.0.0.1` bind, no outbound network calls).
+- Rule-based insights engine (no opaque model dependency).
+- FastAPI + Jinja2 + SQLite architecture with typed schemas and service boundaries.
 
-## Features
+## Core Insight Capabilities
 
-- Process monitor (`psutil.process_iter`) with:
-  - new-process detection via `process_seen`
-  - unusual executable path detection (`/tmp`, `/private/tmp`, `~/Downloads`)
-  - denylist and allowlist checks from config
-  - privacy default: no command-line args collected
-- Login/auth monitor (`/usr/bin/log show`) with:
-  - fixed command + fixed predicate
-  - no user-supplied predicate
-  - timeout and error handling
-- Network listener monitor (`psutil.net_connections(kind="inet")`) with:
-  - snapshot comparison for new listeners
-  - interface-aware severity (`0.0.0.0` / `::` => HIGH)
-- Optional filewatch monitor (`watchdog`, OFF by default):
-  - limited paths only (`~/Downloads`, `~/Desktop` by default)
-  - debounce to reduce noise
-  - executable artifact heuristics
-- Local web UI (FastAPI + Jinja2):
-  - Overview, Events, Listeners, Settings pages
-  - security headers middleware
-  - docs disabled by default
+1. Daily Brief
+- Current risk score (0-100)
+- Delta vs 7-day average
+- Top risk driver
+- Unusual behaviors (2-4)
+- Priority action queue
 
-## Security Defaults
+2. Baseline-aware anomaly insights
+- Signals:
+  - `failed_logins_24h`
+  - `new_listeners_24h`
+  - `new_processes_24h`
+  - `suspicious_exec_path_24h`
+- Baseline = 14-day median
+- Ratio = `today / max(1, baseline)`
+- Classification:
+  - `< 1.5`: normal
+  - `1.5 to < 3`: elevated
+  - `>= 3`: anomalous
 
-- Web server binds to loopback (`127.0.0.1` or other loopback only).
-- FastAPI docs endpoints disabled by default (`/docs`, `/redoc`, `/openapi.json`).
-- Strict template escaping (Jinja2 autoescape, no unsafe HTML rendering).
-- SQL injection defenses: parameterized SQL only.
-- Subprocess safety for login monitor:
-  - `shell=False`
-  - fixed executable path (`/usr/bin/log`)
-  - fixed args only
-  - timeout handling
-- Sanitization for DB inserts:
-  - control character stripping
-  - truncation to 4k per text field
-  - JSON-safe details serialization
-- Filesystem permissions:
-  - `~/.mac_watchdog` => `0700`
-  - config and DB files => `0600`
-- Local-only/no exfiltration by design.
+3. Risk drivers
+- Categories:
+  - `network_exposure`
+  - `process_anomaly`
+  - `auth_anomaly`
+  - `filewatch_anomaly`
+- Contribution shown as % of today's weighted risk.
 
-## Threat Model (MVP)
+4. New vs resolved deltas (since yesterday)
+- Diff-based fingerprint comparison between yesterday and today.
 
-### Assets
-- Local event history (`events` table)
-- Process/network/login telemetry
-- Local configuration
+5. Explainable insight cards
+- Severity (`INFO/WARN/HIGH`)
+- Confidence (`LOW/MEDIUM/HIGH`)
+- Exact rule text
+- Structured evidence
+- Recommended action
+- Status (`open/resolved/acknowledged`)
 
-### Trusted boundary
-- User account on local Mac
-- Loopback-only dashboard (`127.0.0.1`)
+6. Dedup/suppression
+- Fingerprint-based collapse in rolling 30-minute window.
+- Repeated events shown with `count` and `last_seen`.
 
-### Attacker assumptions
-- Unprivileged local malware may run on host.
-- Network attackers should not access the app if loopback binding is preserved.
-- Root/system-level adversary is out of scope for this MVP.
+7. Posture trend
+- Today risk score vs 7-day average
+- HIGH alerts/day 7-day series
+- Status: Improving / Stable / Regressing
 
-### Main risks and mitigations
-- Command injection: fixed subprocess command and args.
-- SQL injection: parameterized queries everywhere.
-- XSS: server-rendered templates with escaping; no untrusted HTML rendering.
-- Privilege escalation: app runs unprivileged, no sudo requirement.
-- Overexposure: loopback-only binding, docs disabled by default.
+## Security Controls
 
-## Project Layout
+- Local-only defaults
+  - Loopback-only host validation in config.
+  - Default bind: `127.0.0.1`.
+- Web hardening
+  - `/docs`, `/redoc`, and OpenAPI disabled by default.
+  - Security headers middleware:
+    - `Content-Security-Policy` (strict local template policy)
+    - `X-Content-Type-Options: nosniff`
+    - `X-Frame-Options: DENY`
+    - `Referrer-Policy: no-referrer`
+- Input/output safety
+  - Strict Pydantic validation models across config/events/insights.
+  - Sanitization and length-caps on persisted text fields.
+  - Secret-like keys/values redacted during sanitization.
+  - Jinja autoescape enforced; no untrusted HTML rendering.
+- Command/process safety
+  - No `shell=True`.
+  - Fixed subprocess command/arguments only.
+  - Timeouts and exception handling in collectors.
+- DB safety
+  - Parameterized SQL paths.
+  - No user-driven dynamic SQL generation.
+  - Data dir/file permissions: `0700` dir, `0600` config/db.
+- Privacy defaults
+  - No process command-line collection by default.
+  - Redaction of password/token/secret-like content.
+- Reliability
+  - Collector and insight engine failures degrade into WARN events, not process crash.
 
-```
-mac_watchdog/
-  __init__.py
-  main.py
-  config.py
-  db.py
-  models.py
-  sanitizer.py
-  scoring.py
-  scheduler.py
-  collectors/
-    __init__.py
-    processes.py
-    logins.py
-    network.py
-    filewatch.py
-  web/
-    __init__.py
-    app.py
-    middleware.py
-    routes.py
-    templates/
-      base.html
-      overview.html
-      events.html
-      listeners.html
-      settings.html
-    static/
-      styles.css
-tests/
-  test_config.py
-  test_db.py
-  test_sanitizer.py
-  test_collectors_resilience.py
-  test_web_local_bind.py
-pyproject.toml
-.env.example
-.gitignore
-README.md
-```
+## Insight Methodology
 
-## Configuration
+### Risk Scoring (deterministic)
+- Weights: `INFO=1`, `WARN=3`, `HIGH=8` (configurable).
+- `daily_weighted = INFO*1 + WARN*3 + HIGH*8`
+- `rolling_max_30d = max(static_cap, today, historical_30d)`
+- `risk_score = min(100, round(100 * daily_weighted / max(1, rolling_max_30d)))`
+- Formula metadata is stored with daily metrics.
 
-Default config path: `~/.mac_watchdog/config.toml`
+### Confidence Rules
+- `HIGH`: deterministic strong signal context (for example anomalous listener/suspicious exec signals).
+- `MEDIUM`: anomaly ratio `>= 3` with moderate evidence.
+- `LOW`: anomaly ratio `1.5 <= ratio < 3` or weaker evidence.
 
-```toml
-interval_seconds = 60
-web_host = "127.0.0.1"
-web_port = 8765
-enable_file_watch = false
-watch_paths = ["~/Downloads", "~/Desktop"]
-deny_process_names = []
-allow_process_paths = []
-unusual_exec_paths = ["/tmp", "/private/tmp"]
-severity_weights = { INFO = 1, WARN = 3, HIGH = 8 }
-dev_enable_docs = false
-```
+## Data Model
 
-Environment overrides:
+Existing tables are preserved; these are added via migration:
 
-- `MAC_WATCHDOG_INTERVAL`
-- `MAC_WATCHDOG_HOST`
-- `MAC_WATCHDOG_PORT`
-- `MAC_WATCHDOG_ENABLE_FILE_WATCH`
-- `MAC_WATCHDOG_WATCH_PATHS`
-- `MAC_WATCHDOG_DENY_PROCESS_NAMES`
-- `MAC_WATCHDOG_ALLOW_PROCESS_PATHS`
-- `MAC_WATCHDOG_UNUSUAL_EXEC_PATHS`
-- `MAC_WATCHDOG_DEV_ENABLE_DOCS`
-- `MAC_WATCHDOG_SEVERITY_WEIGHTS` (example: `INFO=1,WARN=3,HIGH=8`)
+- `daily_metrics`
+  - `date TEXT PRIMARY KEY`
+  - `risk_score INTEGER NOT NULL`
+  - `high_count INTEGER NOT NULL`
+  - `warn_count INTEGER NOT NULL`
+  - `info_count INTEGER NOT NULL`
+  - `failed_logins INTEGER NOT NULL`
+  - `new_listeners INTEGER NOT NULL`
+  - `new_processes INTEGER NOT NULL`
+  - `suspicious_execs INTEGER NOT NULL`
+  - `baseline_deltas_json TEXT NOT NULL`
+  - `drivers_json TEXT NOT NULL`
+  - `updated_at TEXT NOT NULL`
 
-## Install (macOS)
+- `insights`
+  - `id INTEGER PRIMARY KEY`
+  - `ts TEXT NOT NULL`
+  - `insight_type TEXT NOT NULL`
+  - `source TEXT NOT NULL`
+  - `severity TEXT NOT NULL`
+  - `confidence TEXT NOT NULL`
+  - `title TEXT NOT NULL`
+  - `explanation TEXT NOT NULL`
+  - `evidence_json TEXT NOT NULL`
+  - `action_text TEXT NOT NULL`
+  - `fingerprint TEXT NOT NULL`
+  - `status TEXT NOT NULL DEFAULT 'open'`
+  - `first_seen TEXT NOT NULL`
+  - `last_seen TEXT NOT NULL`
+  - `count INTEGER NOT NULL DEFAULT 1`
 
-```bash
-cd /Users/devano/Documents/GitHub/sec44
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e .
-```
+Indexes:
+- `idx_insights_ts`
+- `idx_insights_status`
+- `idx_insights_severity`
+- `idx_insights_fingerprint`
+- `idx_daily_metrics_date`
 
-For development checks:
+Migration files:
+- `mac_watchdog/migrations/0001_daily_metrics_insights.sql`
 
-```bash
-pip install -e .[dev]
-```
+## Routes
 
-## Run
+- `/overview` (also `/`): Daily Brief + action queue + drivers + deltas + anomalies + trend
+- `/insights`: paginated insight cards with filters (`severity`, `source`, `status`, `start`, `end`)
+- `/events`: raw evidence timeline
+- `/listeners`
+- `/settings`
 
-Initialize config + DB:
+## Commands
+
+Initialize config and DB:
 
 ```bash
 mac-watchdog init
 ```
 
-Run one collection cycle:
+Apply migrations + backfill metrics/insights where possible:
 
 ```bash
-mac-watchdog run-once --verbose
+mac-watchdog migrate
 ```
 
-Run daemon collectors only:
-
-```bash
-mac-watchdog daemon --no-web --verbose
-```
-
-Run daemon + local dashboard:
+Run collector daemon (with insights generation each cycle):
 
 ```bash
 mac-watchdog daemon --verbose
 ```
 
-Run dashboard only:
+Run UI only:
 
 ```bash
 mac-watchdog serve --host 127.0.0.1 --port 8765
 ```
 
-Module entrypoint is also available:
+Run one cycle:
 
 ```bash
-python -m mac_watchdog.main run-once
+mac-watchdog run-once --verbose
 ```
 
-## Test Commands
+Run tests:
 
 ```bash
 pytest
 ```
 
-Optional quality checks:
+## Seed Demo Data
+
+Use deterministic seeded telemetry to validate insight quality quickly:
 
 ```bash
-ruff check .
-black --check .
-mypy mac_watchdog
+python seed_demo_data.py
 ```
 
-Optional dependency audit:
+Optional:
 
 ```bash
-pip-audit
+python seed_demo_data.py --days 21
+python seed_demo_data.py --no-reset
 ```
 
-## SQLite Schema
+## Compatibility and Backfill
 
-Location: `~/.mac_watchdog/mac_watchdog.db`
+- Migration is versioned via `schema_migrations`.
+- Backfill is best-effort:
+  - Reconstructs `daily_metrics` and `insights` from existing events where possible.
+  - If historical reconstruction is incomplete, forward computation still works from current day.
 
-- `events(id, ts, source, severity, title, details_json)`
-- `process_seen(process_key, first_seen, last_seen)`
-- `latest_snapshots(key, ts, blob_json)`
-- `app_state(key, value)`
+## Limitations
 
-Indexes:
+- Local SQLite is not tamper-evident.
+- Host-level collection fidelity can be constrained by macOS permissions.
+- No multi-user auth model because MVP is loopback-local only.
+- Rule-based scoring is deterministic but intentionally conservative.
 
-- `idx_events_ts`
-- `idx_events_source`
-- `idx_events_severity`
+## Future SaaS Migration Plan
 
-## LaunchAgent Examples (User-level)
-
-Collector daemon (no web):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-  <dict>
-    <key>Label</key><string>com.local.macwatchdog.collector</string>
-    <key>ProgramArguments</key>
-    <array>
-      <string>/Users/YOU/.venv/bin/mac-watchdog</string>
-      <string>daemon</string>
-      <string>--no-web</string>
-    </array>
-    <key>WorkingDirectory</key><string>/Users/YOU/path/to/sec44</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-      <key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin</string>
-    </dict>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>/tmp/mac-watchdog.out.log</string>
-    <key>StandardErrorPath</key><string>/tmp/mac-watchdog.err.log</string>
-  </dict>
-</plist>
-```
-
-Web UI service (optional):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-  <dict>
-    <key>Label</key><string>com.local.macwatchdog.web</string>
-    <key>ProgramArguments</key>
-    <array>
-      <string>/Users/YOU/.venv/bin/mac-watchdog</string>
-      <string>serve</string>
-      <string>--host</string>
-      <string>127.0.0.1</string>
-      <string>--port</string>
-      <string>8765</string>
-    </array>
-    <key>WorkingDirectory</key><string>/Users/YOU/path/to/sec44</string>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
-  </dict>
-</plist>
-```
-
-## Security Limitations (MVP)
-
-- No authentication because service is localhost-only; auth is mandatory if exposed beyond loopback.
-- No kernel/system extension telemetry.
-- No integrity-protected local storage yet.
-- No event signing/tamper evidence in MVP.
-- Some process/listener owner details may be hidden by macOS permissions.
-
-## SaaS Migration Path (Next Steps)
-
-1. Introduce signed local agent identity + mTLS transport to backend.
-2. Add tenant-aware ingest API and multi-tenant RBAC.
-3. Move from local SQLite to secure queue + centralized datastore.
-4. Add authenticated web console with OIDC/SAML and audit logs.
-5. Implement policy distribution and remote update channels.
-6. Add secure event batching, compression, retry, and backpressure controls.
+1. Keep current local collectors as agent modules with signed artifacts.
+2. Replace local persistence with buffered signed event transport + mTLS ingest.
+3. Add tenant-aware authn/authz and policy distribution.
+4. Move insight services to shared stateless compute workers.
+5. Add centralized audit logs, retention controls, and policy attestation.

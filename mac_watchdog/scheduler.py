@@ -13,6 +13,7 @@ from mac_watchdog.collectors import (
 )
 from mac_watchdog.config import AppConfig
 from mac_watchdog.db import Database
+from mac_watchdog.insights import InsightEngine
 from mac_watchdog.models import EventIn, Severity, Source
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ class WatchdogScheduler:
         self.db = db
         self.verbose = verbose
         self._filewatch: FileWatchService | None = None
+        self._insight_engine = InsightEngine(config=config, db=db)
 
     def _collect_all(self) -> list[EventIn]:
         events: list[EventIn] = []
@@ -63,6 +65,27 @@ class WatchdogScheduler:
     def run_once(self) -> dict[str, Any]:
         events = self._collect_all()
         inserted = self.db.insert_events(events)
+
+        insight_summary: dict[str, Any] = {}
+        try:
+            insight_result = self._insight_engine.generate_cycle()
+            insight_summary = {
+                "generated_insights": insight_result.generated_insights,
+                "risk_score": insight_result.risk_score,
+                "new_risks": insight_result.new_risks,
+                "resolved_risks": insight_result.resolved_risks,
+            }
+        except Exception as exc:
+            self.db.insert_event(
+                EventIn(
+                    source=Source.SYSTEM,
+                    severity=Severity.WARN,
+                    title="Insight engine execution failure",
+                    details={"error": str(exc)},
+                )
+            )
+            insight_summary = {"generated_insights": 0, "error": str(exc)}
+
         now = datetime.now(UTC).isoformat()
         self.db.set_app_state("last_run", now)
         self.db.set_app_state("last_run_inserted", str(inserted))
@@ -75,6 +98,7 @@ class WatchdogScheduler:
             "inserted": inserted,
             "counts": cycle_counts,
             "total_events": self.db.total_events(),
+            "insights": insight_summary,
         }
         if self.verbose:
             logger.info("collector cycle complete: %s", summary)

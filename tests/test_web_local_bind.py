@@ -18,11 +18,19 @@ def test_web_routes_and_docs_disabled(tmp_path: Path) -> None:
         client = TestClient(app)
 
         assert client.get("/").status_code == 200
+        assert client.get("/overview").status_code == 200
+        assert client.get("/insights").status_code == 200
         assert client.get("/events").status_code == 200
         assert client.get("/listeners").status_code == 200
         assert client.get("/settings").status_code == 200
         assert client.get("/docs").status_code == 404
         assert client.get("/redoc").status_code == 404
+
+        headers = client.get("/overview").headers
+        assert headers["x-content-type-options"] == "nosniff"
+        assert headers["x-frame-options"] == "DENY"
+        assert headers["referrer-policy"] == "no-referrer"
+        assert "content-security-policy" in headers
     finally:
         db.close()
 
