@@ -21,6 +21,16 @@ def _database_url() -> str:
     env_url = os.getenv("DATABASE_URL")
     if env_url:
         return env_url
+
+    # When running in a build environment like Railway's, where the database
+    # is not available at build time, we can use a dummy URL. This allows
+    # Alembic to generate the migration scripts without a live connection.
+    # The actual migrations will run against the real database at runtime.
+    # We detect a build environment by checking for common CI/build variables.
+    if os.getenv("CI") or os.getenv("RAILWAY_STATIC_URL"):
+        print("WARNING: Using dummy DATABASE_URL for build process.")
+        return "postgresql+psycopg://dummy:dummy@localhost/dummy"
+
     ini_url = config.get_main_option("sqlalchemy.url")
     if ini_url:
         return ini_url
