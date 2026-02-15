@@ -130,7 +130,19 @@ def load_config() -> ServerConfig:
     environment = os.getenv("EM_ENV", "development").strip().lower()
     allow_test_sqlite = _parse_bool(os.getenv("EM_ALLOW_SQLITE_FOR_TESTS"), environment in {"test", "ci"})
 
-    database_url = _validate_database_url(_require_env("DATABASE_URL"), allow_test_sqlite=allow_test_sqlite)
+    database_url_from_env = os.getenv("DATABASE_URL", "").strip()
+    if not database_url_from_env and (os.getenv("CI") or os.getenv("RAILWAY_STATIC_URL")):
+        # If DATABASE_URL is not set and we are in a CI/build environment,
+        # provide a dummy URL to allow configuration loading to proceed.
+        # The real DATABASE_URL will be provided at runtime by Railway.
+        print("WARNING: Using dummy DATABASE_URL for build process.")
+        database_url_from_env = "postgresql+psycopg://dummy:dummy@localhost/dummy"
+    elif not database_url_from_env:
+        # If DATABASE_URL is genuinely missing in a non-build environment,
+        # then it's a real error.
+        raise ValueError("DATABASE_URL is required")
+
+    database_url = _validate_database_url(database_url_from_env, allow_test_sqlite=allow_test_sqlite)
     redis_url = _require_env("REDIS_URL")
 
     dev_docs_flag = _parse_bool(os.getenv("EM_DEV_ENABLE_DOCS"), False)
